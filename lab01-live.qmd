@@ -1,0 +1,776 @@
+---
+title: "Lab01"
+format:
+  html:
+    toc: true
+    code-fold: show
+    embed-resources: true
+engine: knitr
+---
+
+Vamos agora brincar de séries temporais.
+
+Um problema que precisamos enfrentar com séries temporais é que como os dados têm uma ordem, precisamos de alguma forma ter essa ordem escrita na base.
+
+Além disso, a ordem é pelo tempo, que é algo que tras informação por si só. Por exemplo, se estamos com uma série temporal de vendas, é natural pensar que certas épocas do ano vendam mais que outras, e que isso se repita ano a ano.
+
+Por isso, uma base de dados de série temporal precisa saber lidar com essa natureza de dados.
+
+# Bases de dados
+
+Existem diversos pacotes utilizados para armazenar séries temporais no R. Veremos 3:
+
+-   `{base}`: dá para fazer muita coisa só com o base/stats, então você verá bastante código desse tipo por aí.
+
+-   `{xts}` / `{zoo}`: serve para organizar uma base de dados no formato de série temporal.
+
+-   `{tsibble}`: é a versão *tidy*, mais recente (2017).
+
+## Base R
+
+Historicamente, isso era feito pela função `ts()`, que funciona assim:
+
+
+```{r}
+
+set.seed(1)
+
+dados <- data.frame(
+  mes = 1:48,
+  vendas = arima.sim(list(order = c(1, 1, 0), ar = 0.7), n = 48)[-1]
+)
+
+plot(dados)
+
+```
+
+
+```{r}
+
+library(reticulate)
+
+objeto_do_r <- 3.7
+
+```
+
+```{python}
+r.objeto_do_r
+objeto_do_python = r.objeto_do_r + 3
+```
+
+```{r}
+py$objeto_do_python
+```
+
+```{r}
+dados_ts <- ts(dados)
+plot(dados_ts)
+```
+
+```{r}
+plot(dados_ts[,"vendas"])
+```
+
+```{r}
+dados_ts <- ts(
+  dados,
+  start = c(2005, 6),
+  frequency = 12
+)
+```
+
+
+```{r}
+plot(dados_ts[,"vendas"])
+```
+
+## xts
+
+```{r}
+class(dados_ts)
+```
+
+```{r}
+dados_ts
+```
+
+```{r}
+xts::as.xts(dados_ts)
+```
+
+
+```{r}
+plot(xts::as.xts(dados_ts)[,"vendas"])
+```
+
+## TSIBBLE
+
+```{r}
+as.Date("2005-06-01") + months(dados$mes)
+```
+
+
+```{r}
+#tsibble::as_tsibble(dados_ts)
+
+dados_tsibble <- tsibble::tsibble(
+  mes = tsibble::yearmonth(as.Date("2005-06-01") + months(dados$mes)),
+  vendas = dados$vendas,
+  index = mes
+)
+
+dados_tsibble
+
+```
+
+## Visualização
+
+```{r}
+library(fpp3)
+```
+
+```{r}
+autoplot(dados_tsibble) +
+  theme_minimal()
+```
+
+```{r}
+dados_tsibble |>
+  gg_tsdisplay()
+```
+
+```{r}
+dados_tsibble$vendas
+```
+
+```{r}
+lag(dados_tsibble$vendas)
+```
+
+```{r}
+x <- acf(dados_tsibble$vendas, plot = FALSE)
+x
+```
+
+```{r}
+cor(
+  dados_tsibble$vendas,
+  lag(dados_tsibble$vendas),
+  use = "pairwise.complete.obs"
+)
+```
+
+```{r}
+cor(
+  dados_tsibble$vendas,
+  lag(lag(dados_tsibble$vendas)),
+  use = "pairwise.complete.obs"
+)
+```
+
+```{r}
+cor(
+  dados_tsibble$vendas,
+  lag(dados_tsibble$vendas, 2),
+  use = "pairwise.complete.obs"
+)
+```
+
+
+```{r}
+dados_tsibble |>
+  model(
+    classical_decomposition(vendas)
+  ) |>
+  components() |>
+  autoplot()
+```
+```{r}
+
+dados_tsibble |>
+  model(
+    STL(vendas)
+  ) |>
+  components() |>
+  autoplot()
+
+```
+
+```{r}
+dados_tsibble |>
+  ACF(vendas, lag_max = 4)
+```
+
+```{r}
+dados_tsibble$vendas
+```
+
+```{r}
+lag(dados_tsibble$vendas)
+```
+
+```{r}
+cor(
+      head(dados_tsibble$vendas, 37),
+      head(lag(dados_tsibble$vendas), 37),
+      use = "na.or.complete"
+  )
+```
+
+
+```{r}
+for(i in 1:48) {
+  print(
+    cor(
+      head(dados_tsibble$vendas, i),
+      head(lag(dados_tsibble$vendas), i),
+      use = "na.or.complete"
+  )
+  )
+}
+
+
+```
+
+
+
+```{r}
+forecast::Acf(dados_tsibble$vendas, plot = FALSE)
+```
+
+```{r}
+x <- dados_tsibble$vendas
+x_c <- x - mean(x)
+
+len <- floor(10 * log10(length(x_c)))
+len=1
+
+cor(
+  x[1:(length(x) - len)],
+  dplyr::lag(x)[1:(length(x) - len)],
+  use = "na.or.complete"
+)
+
+```
+
+
+```{r}
+manual_acf <- function(x, lag.max) {
+  n <- length(x)
+  acf_values <- numeric(lag.max)
+  x_mean <- mean(x)
+
+  for (lag in 1:lag.max) {
+    x_orig <- x[1:(n - lag)] - x_mean
+    x_lagged <- x[(lag + 1):n] - x_mean
+    acf_values[lag] <- cor(x_orig, x_lagged, use = "complete.obs")
+  }
+
+  return(acf_values)
+}
+manual_acf(dados$vendas, 17)
+
+
+
+
+manual_acf <- function(x, lag.max) {
+  n <- length(x)
+  acf_values <- numeric(lag.max)
+  x_mean <- mean(x)
+  for (lag in 1:lag.max) {
+    x_orig <- x - x_mean
+    x_lagged <- dplyr::lag(x, lag) - x_mean
+    acf_values[lag] <- sum(x_orig * x_lagged, na.rm = TRUE) / sum(x_orig^2, na.rm = TRUE)
+  }
+  return(acf_values)
+}
+manual_acf(dados$vendas, 17)
+
+```
+
+```{r}
+
+
+x <- acf(dados$vendas, plot = FALSE)
+
+x$acf
+```
+
+
+
+```{r}
+
+x <- head(letters)
+
+x[1]
+
+```
+
+```{r}
+x <- setNames(head(letters), 0:5)
+
+x[1]
+
+```
+
+```{r}
+x <- dados_tsibble$vendas
+x
+```
+
+```{r}
+x_mean <- mean(x)
+lag_x <- lag(x)
+
+sum((x - x_mean) * (lag_x - x_mean), na.rm = TRUE) / sum((x - x_mean)^2, na.rm = TRUE)
+
+# correlacao
+# (x - x_mean) * (lag_x - lag_x_mean) / (x-x_mean)^2
+```
+
+
+# Hoje:
+
+- Vamos começar retomando ACF e PACF
+- Finalizar gráficos da série temporal, sempre com dados simulados
+- Mostrar como funcionam modelos ARIMA: AR, MA e Integrado
+- Testar raiz unitária
+- Falar sobre sazonalidade
+- Testar raiz unitária com sazonalidade
+
+A ACF é calculada da seguinte forma:
+
+1. Calcula-se a média da série temporal
+2. Calcula-se a diferença entre cada valor e a média
+3. Calcula-se a diferença entre cada valor defasado e a média
+4. Multiplica-se essas diferenças, soma-se e divide-se pela soma dos quadrados das diferenças
+
+Já a PACF é calculada da seguinte forma:
+
+1. Calcula-se a média da série temporal
+2. Calcula-se a diferença entre cada valor e a média
+3. Calcula-se a diferença entre cada valor defasado e a média
+4. Calcula-se a diferença entre cada valor defasado e o valor defasado da média
+5. Multiplica-se essas diferenças, soma-se e divide-se pela soma dos quadrados das diferenças
+6. Repete-se o processo para cada defasagem
+
+
+```{r}
+
+pacf_function <- function(x, lag.max = NULL, na.action = na.fail, demean = TRUE) {
+  # Ensure the input is numeric
+  x <- as.numeric(x)
+  
+  # Apply the na.action function (default is na.fail)
+  x <- na.action(x)
+  
+  N <- length(x)
+  
+  # Default lag.max if not specified
+  if (is.null(lag.max)) {
+    lag.max <- floor(10 * log10(N))
+  } else {
+    lag.max <- as.integer(lag.max)
+  }
+  
+  # Demean the series if demean is TRUE (default)
+  if (demean) {
+    x <- x - mean(x)
+  }
+  
+  # Compute the autocovariances using acf()
+  acf_values <- acf(x, lag.max = lag.max, plot = FALSE, demean = FALSE, type = "covariance")$acf
+  gamma <- as.vector(acf_values)
+  
+  # Normalize to get autocorrelations
+  r <- gamma / gamma[1]
+  
+  # Initialize PACF values
+  pacf_values <- numeric(lag.max)
+  
+  # Compute PACF using Yule-Walker equations
+  for (k in 1:lag.max) {
+    # Construct the Toeplitz matrix R
+    R <- toeplitz(r[1:k])
+    
+    # Right-hand side vector
+    r_vec <- r[2:(k + 1)]
+    
+    # Solve the Yule-Walker equations
+    phi <- solve(R, r_vec)
+    
+    # The PACF at lag k is the last coefficient
+    pacf_values[k] <- phi[k]
+  }
+  
+  # Prepare the result
+  lags <- 1:lag.max
+  result <- list(pacf = pacf_values, lag = lags)
+  return(result)
+}
+
+
+
+
+pacf(dados$vendas, plot = FALSE)
+pacf_function(dados$vendas)
+
+```
+
+
+```{r}
+aff <- 10
+```
+
+```{r}
+
+pacf(dados_tsibble$vendas)
+
+```
+
+
+```{r}
+
+dados_tsibble |> 
+  gg_tsdisplay(plot_type = "partial")
+
+```
+
+
+```{r}
+dados_AR1 <- data.frame(
+  mes = 1:48,
+  vendas = arima.sim(list(order = c(1, 0, 0), ar = 0.7))
+)
+
+dados_AR2 <- data.frame(
+  mes = 1:48,
+  vendas = arima.sim(list(order = c(2, 0, 0), ar = c(0.4, 0.5)))
+)
+
+dados_MA1 <- data.frame(
+  mes = 1:48,
+  vendas = arima.sim(list(order = c(0, 0, 1), ma = 0.7))
+)
+
+dados_MA2 <- data.frame(
+  mes = 1:48,
+  vendas = arima.sim(list(order = c(0, 0, 2), ma = c(0.7, 0.1)))
+)
+
+dados_ARMA11 <- data.frame(
+  mes = 1:48,
+  vendas = arima.sim(list(order = c(1, 0, 1), ar = 0.7, ma = .5))
+)
+
+
+```
+
+
+```{r}
+arima.sim(list(order = c(1, 0, 0), ar = 0.7), 100)
+
+# order = c(2, 0, 2)
+# ARMA(2,2)
+# order = c(3, 0, 4)
+# ARMA(3,4)
+# order = c(2, 0, 0)
+# ARMA(2,0) == AR(2)
+# order = c(0, 0, 3)
+# MA(3) == ARMA(0,3)
+
+```
+
+
+```{r}
+# AR(1)
+x <- arima.sim(list(order = c(1, 0, 0), ar = 0.7), 100)
+
+tsibble::tsibble(
+  mes = 1:100,
+  vendas = x,
+  index = mes
+) |> 
+  gg_tsdisplay(x, plot_type = "partial")
+
+```
+
+
+```{r}
+# AR(0)
+x <- arima.sim(list(order = c(0, 0, 0)), 100)
+
+tsibble::tsibble(
+  mes = 1:100,
+  vendas = x,
+  index = mes
+) |> 
+  gg_tsdisplay(x, plot_type = "partial")
+
+```
+
+
+```{r}
+# AR(1)
+x <- arima.sim(list(order = c(1, 0, 0), ar = 0.99), 100)
+
+tsibble::tsibble(
+  mes = 1:100,
+  vendas = x,
+  index = mes
+) |> 
+  gg_tsdisplay(x, plot_type = "partial")
+
+```
+
+```{r}
+# AR(2)
+x <- arima.sim(list(order = c(2, 0, 0), ar = c(.4, .4)), 100)
+
+tsibble::tsibble(
+  mes = 1:100,
+  vendas = x,
+  index = mes
+) |> 
+  gg_tsdisplay(x, plot_type = "partial")
+
+```
+
+```{r}
+# MA(1)
+x <- arima.sim(list(order = c(0, 0, 1), ma = 0.8), 100)
+
+tsibble::tsibble(
+  mes = 1:100,
+  vendas = x,
+  index = mes
+) |> 
+  gg_tsdisplay(x, plot_type = "partial")
+
+```
+
+```{r}
+# MA(2)
+x <- arima.sim(list(order = c(0, 0, 2), ma = c(0.4, 0.4)), 100)
+
+tsibble::tsibble(
+  mes = 1:100,
+  vendas = x,
+  index = mes
+) |> 
+  gg_tsdisplay(x, plot_type = "partial")
+
+```
+
+```{r}
+x <- arima.sim(list(order = c(0, 1, 2), ma = c(0.4, 0.4)), 100)
+
+plot(x)
+```
+
+```{r}
+x <- arima.sim(list(order = c(0, 1, 0)), 100)
+length(x)
+
+x - dplyr::lag(as.numeric(x))
+```
+
+
+```{r}
+
+# ARIMA(1,1,2)
+x <- arima.sim(list(order = c(1, 1, 2), ar = c(0.5), ma = c(0.4, 0.4)), 100)
+
+tsibble::tsibble(
+  mes = 1:101,
+  vendas = x,
+  index = mes
+) |> 
+  gg_tsdisplay(x, plot_type = "partial")
+
+
+```
+
+
+é estacionária?
+
+```{r}
+
+# Augmented Dickey Fuller
+# KPSS
+
+tseries::adf.test(x)
+
+```
+
+```{r}
+tsibble::tsibble(
+  mes = 1:101,
+  vendas = x,
+  index = mes
+) |> 
+  features(
+    vendas, unitroot_kpss
+  )
+```
+
+
+```{r}
+tsibble::tsibble(
+  mes = 1:101,
+  vendas = x,
+  index = mes
+) |> 
+  features(
+    vendas, unitroot_ndiffs
+  )
+```
+
+```{r}
+
+tsibble::tsibble(
+  mes = 1:101,
+  vendas = x,
+  index = mes
+) |> 
+  dplyr::mutate(
+    x = difference(x)
+  ) |> 
+  gg_tsdisplay(x, plot_type = "partial")
+
+
+```
+
+RESUMINDO:
+
+O fluxo para conseguir especificar um modelo ARIMA(p,d,q) tem os seguintes passos:
+
+1. Fazer um teste ADF, KPSS, etc para verificar se a série é estacionária (raiz unitária)
+
+2. Se os testes indicarem que a série não é estacionária, fazemos a diferença. Se não, segue
+
+3. Fazemos os gráficos ACF e PACF dessa série e identificamos, com eles, as ordens MA e AR, respectivamente
+
+
+
+
+
+$$
+y_t = \alpha + \beta_1 y_{t-1}+ \beta_2 y_{t-2} + \dots + \beta_k y_{t-k}
+$$
+
+
+# Modelo AR
+
+O modelo AR(1) é dado por
+
+$$
+y_t = \phi y_{t-1} + \epsilon_t
+$$
+
+O valor de $\phi$ é a autocorrelação entre $y_t$ e $y_{t-1}$. Esse valor deve ser entre -1 e 1. Se for 0, o modelo é um ruído branco. Se for 1, o modelo é um passeio aleatório.
+
+```{r}
+n <- 200
+dados <- data.frame(
+  mes = seq_len(n),
+  vendas = arima.sim(list(order = c(1,0,2), ar = c(.4), ma = c(.3, .5)), n = n)
+)
+```
+
+O modelo AR(p) é dado por
+
+$$
+y_t = \phi_1 y_{t-1} + \phi_2 y_{t-2} + \ldots + \phi_p y_{t-p} + \epsilon_t
+$$
+
+O valor da soma dos $\phi$'s deve ser menor que 1 em módulo. Isso garante que o modelo seja estacionário. Se a soma for maior que 1, o modelo é não-estacionário. Esse é o conceito de raízes unitárias.
+
+```{r}
+n <- 200
+dados <- data.frame(
+  mes = seq_len(n),
+  vendas = arima.sim(list(order = c(4,0,0), ar = c(.4, .2, .2, .1)), n = n)
+)
+```
+
+```{r}
+dados_tsibble <- tsibble::tsibble(
+  mes = tsibble::yearmonth(as.Date("2005-06-01") + months(dados$mes)),
+  vendas = dados$vendas,
+  index = mes
+)
+```
+
+```{r}
+dados_tsibble |> 
+  ACF() |> 
+  autoplot()
+```
+
+```{r}
+
+library(fpp3)
+dados_tsibble |> 
+  features(
+    vendas, unitroot_kpss
+  )
+
+tseries::adf.test(dados_tsibble$vendas)
+```
+
+Como testar raiz unitária?
+
+# como fazer no python?
+
+```{r}
+n <- 200
+dados <- data.frame(
+  mes = seq_len(n+1),
+  vendas = arima.sim(list(order = c(1,1,2), ar = c(.4), ma = c(.3, .5)), n = n)
+)
+```
+
+```{python}
+r.dados
+```
+
+
+```{python}
+from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
+from statsmodels.tsa.stattools import adfuller, kpss
+import seaborn as sns
+```
+
+
+```{python}
+adfuller(r.dados['vendas'])
+```
+
+```{python}
+kpss(r.dados['vendas'])
+```
+
+```{python}
+import numpy as np
+import pandas as pd
+
+diferenca = r.dados['vendas'] - r.dados['vendas'].shift(1)
+
+dif_na = diferenca.dropna()
+
+```
+
+```{python}
+import matplotlib.pyplot as plt
+fig, ax = plt.subplots()
+sns.lineplot(dif_na)
+```
+
+```{python}
+plot_acf(dif_na)
+```
+
+```{python}
+plot_pacf(dif_na)
+```
