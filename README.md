@@ -44,3 +44,14 @@ Laboratórios de Financial Analytics. Plano inicial:
   - Talvez comece às 13h, vamos ver
   - Tempo para fazer trabalho final
   - Tópicos
+
+
+### Nota mental
+
+passar para eles alguns links
+
+- bases de dados
+- hyndman
+- curso do hyndman
+
+subir materiais no github
