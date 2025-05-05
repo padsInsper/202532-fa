@@ -33,9 +33,30 @@ dados <- data.frame(
 )
 ```
 
+ARIMA(p,d,q)
+ARIMA(1,0,1)
+
+p = AR = 1 (auto regressivo)
+d = D = 0 (diferenciação)
+q = MA = 1 (moving average)
+
+$$
+y_t = \alpha + \phi_1 y_{t-1} + \epsilon_t + \theta_1 \epsilon_{t-1}  
+$$
+
+No nosso caso,
+
+$$
+y_t = \alpha + \phi_1 y_{t-1} + \phi_2 y_{t-2} + \epsilon_t
+$$
+
+AR(2)
+
 ## Descritiva em R
 
 ```{r}
+#library(fpp3)
+
 dados_tsibble <- dados |>
   dplyr::mutate(
     ds = as.Date("1995-05-01") + months(ds),
@@ -49,10 +70,23 @@ dados_tsibble |>
 
 ```
 
+```{r}
+dados |>
+  dplyr::mutate(y_lag = dplyr::lag(as.numeric(y)))
+```
+
+$$
+y_t = \alpha + \beta_1 y_{t-1} + \beta_2 y_{t-2} + \beta_3 y_{t-3}  
+$$
+
 
 ## Descritiva em Python
 
 ```{python}
+
+import matplotlib
+
+matplotlib.use('Agg')
 
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -81,7 +115,7 @@ plotar_serie(dados.y)
 ## Testes em R
 
 ```{r}
-tseries::adf.test(dados_tsibble$vendas)
+tseries::adf.test(dados_tsibble$y)
 
 dados_tsibble |>
   fabletools::features(
@@ -128,7 +162,7 @@ plotar_serie(dif)
 ```{r}
 fit <- dados_tsibble |>
   fabletools::model(
-    arima_manual = fable::ARIMA(y ~ 1 + pdq(0,0,0) + PDQ(0,0,0)),
+    arima_manual = fable::ARIMA(y ~ 1 + pdq(1,0,0) + PDQ(0,0,0)),
     stepwise = fable::ARIMA(y ~ 1 + PDQ(0,0,0)),
     search = fable::ARIMA(y ~ 1 + PDQ(0,0,0), stepwise = FALSE)
   )
@@ -142,7 +176,7 @@ fit |>
 
 fit |>
   broom::augment() |>
-  dplyr::filter(.model == "stepwise") |>
+  dplyr::filter(.model == "arima_manual") |>
   feasts::gg_tsdisplay(.resid, plot_type = "partial")
 
 ```
@@ -157,8 +191,7 @@ from statsforecast.arima import ARIMASummary
 dados = r.dados
 
 models = [
-    ARIMA(order=(2, 1, 0), alias="arima210"),
-    ARIMA(order=(0, 1, 3), alias="arima013"),
+    ARIMA(order=(2, 0, 0), alias="arima200"),
     AutoARIMA(alias="stepwise"),
     AutoARIMA(stepwise=False, alias="search"),
 ]
@@ -170,7 +203,6 @@ sf.fit(df=dados)
 print(ARIMASummary(sf.fitted_[0, 0].model_))
 print(ARIMASummary(sf.fitted_[0, 1].model_))
 print(ARIMASummary(sf.fitted_[0, 2].model_))
-print(ARIMASummary(sf.fitted_[0, 3].model_))
 ```
 
 ```{python}
