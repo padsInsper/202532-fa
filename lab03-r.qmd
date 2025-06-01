@@ -214,7 +214,7 @@ Testando para um ativo
 ```{r}
 garch_individual(
   parms = list(
-    p = 1, q = 1, m = 1, n = 1, dist = "std"
+    p = 0, q = 0, m = 1, n = 1, dist = "std"
   ),
   ret = da_train |>
     dplyr::filter(ticker == "HGRE11.SA") |>
